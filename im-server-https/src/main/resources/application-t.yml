@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: im-server
+
+im:
+  server:
+    port: 20000
+  index:
+    url: http://localhost:8081/demo
+#  jedis:
+#    #JedisProxySingle JedisProxyCluster
+#    #class: JedisProxyCluster
+#    class: JedisProxySingle
+#    hosts: 192.168.7.225:6379
+#    maxTotal: 50
+#    maxIdle: 10
+#    minIdle: 5
