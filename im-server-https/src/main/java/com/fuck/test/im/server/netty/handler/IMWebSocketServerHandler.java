@@ -134,15 +134,14 @@ public class IMWebSocketServerHandler extends SimpleChannelInboundHandler<WebSoc
                 imResponse = new IMResponse.Builder().isSucc(true).message("已经上线过，请不要重复上线").type(IMType.ON_LINE.code).onlines(onlineMap).build();
                 logger.info("房间号：{}，用户id：{}，用户名：{} 已经上线过，重复上线", roomId, requestUserId, requestUserName);
             } else {
-                roomMap.put(requestUserId, new IMServiceImpl(this.ctx, requestUserId, requestUserName));
-                //XXX
-                SessionManager.putRoomSession(roomKey, roomMap);
-
                 onlineMap.put(requestUserId, requestUserName);
                 imResponse = new IMResponse.Builder().isSucc(true).message("上线成功").type(IMType.ON_LINE.code).onlines(onlineMap).build();
                 logger.info("房间号：{}，用户id：{}，用户名：{} 上线成功", roomId, requestUserId, requestUserName);
-
             }
+            //新上线、重复上线重新缓存数据及链接，防止重复上线时 旧链接已关闭
+            roomMap.put(requestUserId, new IMServiceImpl(this.ctx, requestUserId, requestUserName));
+            //XXX
+            SessionManager.putRoomSession(roomKey, roomMap);
         }
         sendWebSocket(imResponse);
         //遍历后端在线人员集合，向其他在线用户推送此用户上线消息
