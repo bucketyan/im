@@ -95,11 +95,11 @@ public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullH
         }
     }
 
-    @Override
+    /*@Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         cause.printStackTrace();
         ctx.close();
-    }
+    }*/
 
     private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {
         // Generate an error page if response getStatus code is not OK (200).

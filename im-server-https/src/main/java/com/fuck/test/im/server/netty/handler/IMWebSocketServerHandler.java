@@ -85,6 +85,64 @@ public class IMWebSocketServerHandler extends SimpleChannelInboundHandler<WebSoc
         }
     }
 
+    @Override
+    public void channelReadComplete(ChannelHandlerContext ctx) {
+        ctx.flush();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        removeUserCtx(ctx);
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+            throws Exception {
+        cause.printStackTrace();
+        removeUserCtx(ctx);
+        ctx.close();
+    }
+
+    /**
+     * 根据断链、出现错误的ctx 删除对应的ctx缓存映射及刷新在线人员列表
+     * @param ctx
+     */
+    private void removeUserCtx(ChannelHandlerContext ctx) throws Exception {
+        String ctxChannelId = ctx.channel().id().asLongText();
+        String[] ctxArr = SessionManager.getCtxSession(ctxChannelId);
+        if (ctxArr != null) {
+            String ctxRoomId = ctxArr[0];
+            String ctxUserId = ctxArr[1];
+            String userName = "";
+            SessionManager.removeCtxSession(ctxChannelId);
+            String roomKey = "tv_room_" + ctxRoomId;
+            //XXX
+            //后端在线人员map key:userId value:imservice(缓存channel上下文、userId、userName)
+            Map<String, Object> roomMap = SessionManager.findRoomSessionById(roomKey);
+            if (MapUtils.isNotEmpty(roomMap)) {
+                IMServiceImpl imServiceImpl = (IMServiceImpl) roomMap.get(ctxUserId);
+                userName = imServiceImpl.getUserName();
+                roomMap.remove(ctxUserId);
+                if (MapUtils.isEmpty(roomMap)) {
+                    //此房间最后一个在线用户 无需通知其他用户该用户下线
+                    SessionManager.removeRoomSession(roomKey);
+                } else {
+                    //通知其他在线人员 该链接对应的用户下线
+                    for (Map.Entry<String, Object> entry : roomMap.entrySet()) {
+                        IMService imService = (IMService) entry.getValue();
+                        //构造request发送至客户端
+                        IMRequest onlineIMRequest = new IMRequest();
+                        onlineIMRequest.setRoomId(ctxRoomId);
+                        onlineIMRequest.setType(IMType.OFF_LINE.code);
+                        onlineIMRequest.setUserId(ctxUserId);
+                        imService.send(onlineIMRequest);
+                    }
+                }
+            }
+            logger.info("userName:{}, userId:{} 离开房间，房间号:{}", userName, ctxUserId, ctxRoomId);
+        }
+    }
+
     /**
      * 上线业务处理
      * 上线请求 默认能进入直播间均为已登录校验过的账号，故不再进行登录校验
@@ -112,10 +170,6 @@ public class IMWebSocketServerHandler extends SimpleChannelInboundHandler<WebSoc
         if (MapUtils.isEmpty(roomMap)) {
             roomMap = new HashMap<String, Object>();
             //此房间没有用户进入过
-            roomMap.put(requestUserId, new IMServiceImpl(this.ctx, requestUserId, requestUserName));
-            //XXX
-            SessionManager.putRoomSession(roomKey, roomMap);
-
             onlineMap.put(requestUserId, requestUserName);
             imResponse = new IMResponse.Builder().isSucc(true).message("上线成功").type(IMType.ON_LINE.code).onlines(onlineMap).build();
             logger.info("房间号：{}，用户id：{}，用户名：{} 第一个进入此直播间", roomId, requestUserId, requestUserName);
@@ -137,12 +191,16 @@ public class IMWebSocketServerHandler extends SimpleChannelInboundHandler<WebSoc
                 onlineMap.put(requestUserId, requestUserName);
                 imResponse = new IMResponse.Builder().isSucc(true).message("上线成功").type(IMType.ON_LINE.code).onlines(onlineMap).build();
                 logger.info("房间号：{}，用户id：{}，用户名：{} 上线成功", roomId, requestUserId, requestUserName);
+
             }
             //新上线、重复上线重新缓存数据及链接，防止重复上线时 旧链接已关闭
-            roomMap.put(requestUserId, new IMServiceImpl(this.ctx, requestUserId, requestUserName));
-            //XXX
-            SessionManager.putRoomSession(roomKey, roomMap);
         }
+        roomMap.put(requestUserId, new IMServiceImpl(this.ctx, requestUserId, requestUserName));
+        //XXX
+        SessionManager.putRoomSession(roomKey, roomMap);
+        //缓存ctx、roomid、userid对应关系
+        SessionManager.putCtxSession(this.ctx.channel().id().asLongText(), roomId, requestUserId);
+
         sendWebSocket(imResponse);
         //遍历后端在线人员集合，向其他在线用户推送此用户上线消息
         for (Map.Entry<String, Object> entry : roomMap.entrySet()) {
@@ -213,6 +271,8 @@ public class IMWebSocketServerHandler extends SimpleChannelInboundHandler<WebSoc
         if (MapUtils.isNotEmpty(roomMap)) {
             //移除下线人员
             roomMap.remove(requestUserId);
+
+            SessionManager.removeCtxSession(this.ctx.channel().id().asLongText());
             if (roomMap.isEmpty()) {
                 //删除redis key 无其他用户需要通知该用户下线
                 //XXX
