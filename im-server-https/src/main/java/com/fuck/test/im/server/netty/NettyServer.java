@@ -49,9 +49,9 @@ public class NettyServer implements Runnable{
 
     private final int port;
     private final String indexUrl;
-    //农事无忧 主播url
+    //nswy 主播url
     private final String anchorUrl;
-    //农事无忧 游客url
+    //nswy 游客url
     private final String visitorUrl;
     //ssl配置文件
     private final String sslPath;
