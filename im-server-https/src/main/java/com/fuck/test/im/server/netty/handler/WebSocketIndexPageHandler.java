@@ -39,11 +39,21 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 **/
 public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
+    //示例demo url
     private final String indexUrl;
 
-    public WebSocketIndexPageHandler(String indexUrl) {
+    //nswy 主播url
+    private final String anchorUrl;
+
+    //nswy 游客url
+    private final String visitorUrl;
+
+    public WebSocketIndexPageHandler(String indexUrl, String anchorUrl, String visitorUrl) {
         this.indexUrl = indexUrl;
+        this.anchorUrl = anchorUrl;
+        this.visitorUrl = visitorUrl;
     }
+
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
@@ -60,9 +70,18 @@ public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullH
         }
 
         // Send the index page
-        if ("/".equals(req.uri()) || "/index.html".equals(req.uri())) {
-
-            String respContent = OKHttpUtil.getInstance().excuteHttpGet(indexUrl);
+        if ("/".equals(req.uri()) || "/index.html".equals(req.uri())
+                || "/anchor".equals(req.uri()) || "/visitor".equals(req.uri())) {
+            // / /index 示例demo
+            // /anchor /visitor 配合nswy的自定义主播、游客url
+            String respContent = "";
+            if ("/".equals(req.uri()) || "/index.html".equals(req.uri())) {
+                respContent = OKHttpUtil.getInstance().excuteHttpGet(indexUrl);
+            } else if ("/anchor".equals(req.uri())) {
+                respContent = OKHttpUtil.getInstance().excuteHttpGet(anchorUrl);
+            } else if ("/visitor".equals(req.uri())) {
+                respContent = OKHttpUtil.getInstance().excuteHttpGet(visitorUrl);
+            }
             ByteBuf content =Unpooled.copiedBuffer(respContent.getBytes());
             FullHttpResponse res = new DefaultFullHttpResponse(HTTP_1_1, OK, content);
             res.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
@@ -79,7 +98,7 @@ public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullH
             for (Map.Entry<String, Object> entry : imRoomsMap.entrySet()) {
                 String roomKey = entry.getKey();
                 Map<String, Object> roomMap = (Map<String, Object>)entry.getValue();
-               // roomMap.keySet()
+                // roomMap.keySet()
                 respMap.put(roomKey.replace("tv_room_", ""), roomMap.keySet());
             }
             String respContent = JSON.toJSONString(respMap);

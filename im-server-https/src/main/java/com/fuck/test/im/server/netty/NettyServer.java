@@ -17,6 +17,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
@@ -24,9 +25,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ResourceUtils;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.io.*;
 //import javax.annotation.Resource;
 
 /**
@@ -46,10 +49,21 @@ public class NettyServer implements Runnable{
 
     private final int port;
     private final String indexUrl;
+    //农事无忧 主播url
+    private final String anchorUrl;
+    //农事无忧 游客url
+    private final String visitorUrl;
+    //ssl配置文件
+    private final String sslPath;
 
-    public NettyServer(@Value("${im.server.port}") int port, @Value("${im.index.url}") String indexUrl) {
+    public NettyServer(@Value("${im.server.port}") int port, @Value("${im.index.url}") String indexUrl,
+                       @Value("${im.anchor.url}") String anchorUrl, @Value("${im.visitor.url}") String visitorUrl,
+                       @Value("${im.ssl.path}") String sslPath) {
         this.port = port;
         this.indexUrl = indexUrl;
+        this.anchorUrl = anchorUrl;
+        this.visitorUrl = visitorUrl;
+        this.sslPath = sslPath;
     }
 
     private static final String WEBSOCKET_PATH = "/websocket";
@@ -67,9 +81,27 @@ public class NettyServer implements Runnable{
     @Override
     public void run() {
         try {
+            /*InputStream inputStream = getClass().getClassLoader().getResourceAsStream("ssl/server.crt");
+            File certChainFile = new File("server.crt");
+            inputStreamToFile(inputStream, certChainFile);
+
+            inputStream = getClass().getClassLoader().getResourceAsStream("ssl/pkcs8_server.key");
+            File keyFile = new File("server.key");
+            inputStreamToFile(inputStream, keyFile);
+
+            inputStream = getClass().getClassLoader().getResourceAsStream("ssl/server.crt");
+            File rootFile = new File("ca.crt");
+            inputStreamToFile(inputStream, rootFile);*/
+            File certChainFile = new File(sslPath + "/server.crt");
+            File keyFile = new File(sslPath + "/pkcs8_server.key");
+            File rootFile = new File(sslPath + "/server.crt");
+            //File keyFile = ResourceUtils.getFile("classpath:ssl/pkcs8_server.key");
+            // File rootFile = ResourceUtils.getFile("classpath:ssl/ca.crt");
+            final SslContext sslCtx = SslContextBuilder.forServer(certChainFile, keyFile).trustManager(rootFile).clientAuth(ClientAuth.NONE).build();
+
             //ssl
-            SelfSignedCertificate ssc = new SelfSignedCertificate();
-            final SslContext sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
+            // SelfSignedCertificate ssc = new SelfSignedCertificate();
+            // final SslContext sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
 
             //初始化ServerBootstrap,netty服务端应入口
             ServerBootstrap serverBootstrap = new ServerBootstrap();
@@ -88,12 +120,12 @@ public class NettyServer implements Runnable{
                     //把多个消息转换为一个单一的FullHttpRequest或是FullHttpResponse
                     //原因: HTTP解码器会在每个HTTP消息中生成多个消息对象HttpRequest/HttpResponse,HttpContent,LastHttpContent
                     pipeline.addLast(new HttpObjectAggregator(65536)); //Http消息转换
-                //    pipeline.addLast(new ChunkedWriteHandler()); //大文件支持
+                    //    pipeline.addLast(new ChunkedWriteHandler()); //大文件支持
                     pipeline.addLast(new WebSocketServerCompressionHandler());//websocket数据压缩
                     //pipeline.addLast(new IMWebSocketServerHandler(jedis)); //自定义websocket业务处理
                     //websockethandler初始化websocket，如握手、ping、pong
                     pipeline.addLast(new WebSocketServerProtocolHandler(WEBSOCKET_PATH, null, true));
-                    pipeline.addLast(new WebSocketIndexPageHandler(indexUrl));
+                    pipeline.addLast(new WebSocketIndexPageHandler(indexUrl, anchorUrl, visitorUrl));
                     pipeline.addLast(new IMWebSocketServerHandler()); //自定义websocket业务处理
                 }
             });
@@ -123,4 +155,33 @@ public class NettyServer implements Runnable{
     }
 
 
+    public void inputStreamToFile(InputStream in,File file) {
+        OutputStream outputStream = null;
+        try {
+            outputStream = new FileOutputStream(file);
+            byte[] b = new byte[1024];
+            int read;
+            while ((read = in.read(b)) != -1) {
+                outputStream.write(b, 0, read);
+            }
+        } catch (Exception e) {
+            System.err.println(e);
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (outputStream != null) {
+                try {
+                    outputStream.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+    }
 }

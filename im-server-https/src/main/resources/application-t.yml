@@ -7,6 +7,12 @@ im:
     port: 20000
   index:
     url: http://localhost:8081/demo
+  anchor:
+    url: http://localhost:8081/anchor
+  visitor:
+    url: http://localhost:8081/visitor
+  ssl:
+    path: /opt/im-server-https/config
 #  jedis:
 #    #JedisProxySingle JedisProxyCluster
 #    #class: JedisProxyCluster

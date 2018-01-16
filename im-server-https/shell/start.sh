@@ -45,6 +45,7 @@ java -server -Xmx1g \
      --server.port=$SERVER_PORT \
      --management.port=$MANAGEMENT_PORT \
      --im.server.port=$IM_SERVER_PORT \
+     --im.ssl.path=$HOME/config \
      --spring.profiles.active=t \
      --spring.config.location=$HOME/config/application.yml \
      --logging.config=$HOME/config/log4j2.xml > /dev/null 2>&1 &
